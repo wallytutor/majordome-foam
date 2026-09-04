@@ -13,7 +13,7 @@ from majordome_foam import (
     FieldFile,
 )
 
-TUTORIALS_DIR = Path(__file__).parent.parent.parent / "sandbox-tutorials"
+TUTORIALS_DIR = Path(__file__).parent.parent / "sample"
 
 
 class TestMajordomeFoam(unittest.TestCase):
@@ -56,7 +56,7 @@ class TestMajordomeFoam(unittest.TestCase):
         self.assertNotIn("purgeWrite", dict_obj)
 
     def test_control_dict_wrapper(self):
-        pitz_control = TUTORIALS_DIR / "incompressible/simpleFoam/pitzDaily/system/controlDict"
+        pitz_control = TUTORIALS_DIR / "01-pitzDaily/system/controlDict"
         if pitz_control.exists():
             cd = ControlDict.from_file(pitz_control)
             self.assertEqual(cd.application, "simpleFoam")

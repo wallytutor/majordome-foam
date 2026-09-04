@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.12"
 dependencies = ["majordome-build"]
 
+[project.optional-dependencies]
+devel = ["pytest>=9.1.1"]
+
 [tool.maturin]
 module-name = "majordome_foam.foam"
 python-packages = ["majordome_foam"]
@@ -24,6 +27,9 @@ cache-keys = [
 
 [tool.uv.sources]
 majordome-build = { git = "https://github.com/wallytutor/majordome-build.git" }
+
+[tool.pytest.ini_options]
+python_files = ["test.py"]
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
