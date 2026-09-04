@@ -1,0 +1,19 @@
+[package]
+name = "majordome-foam"
+version = "0.1.0"
+edition = "2024"
+authors = ["Walter Dal'Maz Silva <walter.dalmazsilva@gmail.com>"]
+description = "OpenFOAM dictionary parser and manipulator for Majordome."
+readme = "README.md"
+license = "MIT"
+keywords = ["openfoam", "cfd", "dictionary", "parser"]
+categories = ["science"]
+
+[lib]
+name = "majordome_foam"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies.pyo3]
+version = "0.28.2"
+features = ["extension-module", "abi3-py312", "multiple-pymethods"]
