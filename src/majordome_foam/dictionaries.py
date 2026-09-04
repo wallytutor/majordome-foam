@@ -215,6 +215,16 @@ class ControlDict(FoamDictFile):
         self.set("application", name)
 
     @property
+    def application(self) -> str | None:
+        """ Get simulation application or solver name. """
+        return self.solver
+
+    @application.setter
+    def application(self, name: str) -> None:
+        """ Set simulation application or solver name. """
+        self.solver = name
+
+    @property
     def start_from(self) -> str | None:
         """ Get startFrom mode setting. """
         return self.get("startFrom")
@@ -635,3 +645,157 @@ class VolVectorField(FieldFile):
     """ Volumetric vector field initial conditions file. """
 
     __slots__ = ()
+
+
+class NotACaseError(ValueError):
+    """ Raised when attempting operations on an invalid OpenFOAM case directory. """
+    pass
+
+
+class FoamCaseHandle:
+    """ OpenFOAM case directory handle for dynamic dictionary access and manipulation.
+
+    Parameters
+    ----------
+    root_dir : str | Path | None = None
+        Path to OpenFOAM case root directory. Defaults to current working directory.
+    """
+
+    __slots__ = ("_root_dir", "_cache")
+
+    KNOWN_DICTS: dict[str, tuple[type[FoamDictFile], str]] = {
+        "controlDict": (ControlDict, "system/controlDict"),
+        "control_dict": (ControlDict, "system/controlDict"),
+        "fvSchemes": (FvSchemes, "system/fvSchemes"),
+        "fv_schemes": (FvSchemes, "system/fvSchemes"),
+        "fvSolution": (FvSolution, "system/fvSolution"),
+        "fv_solution": (FvSolution, "system/fvSolution"),
+        "blockMeshDict": (BlockMeshDict, "system/blockMeshDict"),
+        "block_mesh_dict": (BlockMeshDict, "system/blockMeshDict"),
+        "snappyHexMeshDict": (SnappyHexMeshDict, "system/snappyHexMeshDict"),
+        "snappy_hex_mesh_dict": (SnappyHexMeshDict, "system/snappyHexMeshDict"),
+        "decomposeParDict": (DecomposeParDict, "system/decomposeParDict"),
+        "decompose_par_dict": (DecomposeParDict, "system/decomposeParDict"),
+    }
+
+    def __init__(self, root_dir: str | Path | None = None) -> None:
+        if root_dir is None:
+            self._root_dir = Path.cwd().resolve()
+        else:
+            self._root_dir = Path(root_dir).resolve()
+
+        self._cache: dict[str, tuple[Path, FoamDictFile]] = {}
+
+    @property
+    def root_dir(self) -> Path:
+        """ Get absolute path to the case root directory. """
+        return self._root_dir
+
+    @property
+    def is_valid(self) -> bool:
+        """ Check if root directory is a valid OpenFOAM case (contains constant/ and system/controlDict). """
+        constant_dir = self._root_dir / "constant"
+        control_dict = self._root_dir / "system" / "controlDict"
+        return constant_dir.is_dir() and control_dict.is_file()
+
+    def check_valid(self) -> None:
+        """ Raise NotACaseError if the directory is not a valid OpenFOAM case. """
+        if not self.is_valid:
+            raise NotACaseError(
+                f"Directory '{self._root_dir}' is not a valid OpenFOAM case "
+                "(missing 'constant/' directory or 'system/controlDict' file)."
+            )
+
+    def get_dict(self, relative_path: str | Path) -> FoamDictFile:
+        """ Load and cache a dictionary file by relative path from case root.
+
+        Parameters
+        ----------
+        relative_path : str | Path
+            Relative path to dictionary file (e.g. "system/controlDict" or "0/p").
+
+        Returns
+        -------
+        FoamDictFile
+            Loaded dictionary wrapper instance.
+        """
+        self.check_valid()
+        rel_str = str(relative_path)
+
+        if rel_str in self._cache:
+            return self._cache[rel_str][1]
+
+        file_path = self._root_dir / relative_path
+        if not file_path.is_file():
+            raise FileNotFoundError(
+                f"Dictionary file '{relative_path}' not found in case '{self._root_dir}'"
+            )
+
+        cls: type[FoamDictFile] = FoamDictFile
+        filename = file_path.name
+        if filename in self.KNOWN_DICTS:
+            cls = self.KNOWN_DICTS[filename][0]
+        elif file_path.parent.name in ("0", "0.orig") or filename in (
+            "U",
+            "p",
+            "T",
+            "k",
+            "omega",
+            "epsilon",
+            "nut",
+        ):
+            cls = FieldFile
+
+        obj = cls.from_file(file_path)
+        self._cache[rel_str] = (file_path, obj)
+        return obj
+
+    def save(self) -> None:
+        """ Save all cached dictionary modifications back to disk. """
+        for path, obj in self._cache.values():
+            obj.save(path)
+
+    def __getattr__(self, name: str) -> FoamDictFile:
+        if name.startswith("_"):
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        if name in self._cache:
+            return self._cache[name][1]
+
+        self.check_valid()
+
+        if name in self.KNOWN_DICTS:
+            cls, rel_path_str = self.KNOWN_DICTS[name]
+            file_path = self._root_dir / rel_path_str
+            if file_path.is_file():
+                obj = cls.from_file(file_path)
+                self._cache[name] = (file_path, obj)
+                return obj
+
+        candidates = [
+            self._root_dir / "system" / name,
+            self._root_dir / "constant" / name,
+            self._root_dir / "0" / name,
+            self._root_dir / name,
+        ]
+
+        for file_path in candidates:
+            if file_path.is_file():
+                cls = (
+                    FieldFile
+                    if file_path.parent.name in ("0", "0.orig")
+                    else FoamDictFile
+                )
+                obj = cls.from_file(file_path)
+                self._cache[name] = (file_path, obj)
+                return obj
+
+        raise AttributeError(
+            f"No dictionary file matching '{name}' found in case at '{self._root_dir}'"
+        )
+
+    def __repr__(self) -> str:
+        return f"<FoamCaseHandle root='{self._root_dir}' valid={self.is_valid}>"
+

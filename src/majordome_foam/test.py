@@ -4,13 +4,15 @@ import unittest
 from pathlib import Path
 from majordome_foam.foam import FoamDict
 from majordome_foam import (
-    ControlDict,
-    FvSchemes,
-    FvSolution,
-    SnappyHexMeshDict,
     BlockMeshDict,
+    ControlDict,
     DecomposeParDict,
     FieldFile,
+    FoamCaseHandle,
+    FvSchemes,
+    FvSolution,
+    NotACaseError,
+    SnappyHexMeshDict,
 )
 
 TUTORIALS_DIR = Path(__file__).parent.parent / "sample"
@@ -170,6 +172,34 @@ class TestMajordomeFoam(unittest.TestCase):
 
         field.dimensions = [1, -1, -2, 0, 0, 0, 0]
         self.assertEqual(field.dimensions, [1, -1, -2, 0, 0, 0, 0])
+
+    def test_foam_case_handle(self):
+        pitz_dir = TUTORIALS_DIR / "01-pitzDaily"
+        if pitz_dir.exists():
+            case = FoamCaseHandle(root_dir=pitz_dir)
+            self.assertTrue(case.is_valid)
+
+            cd = case.controlDict
+            self.assertEqual(cd.application, "simpleFoam")
+            self.assertEqual(cd.start_from, "startTime")
+
+            bm = case.blockMeshDict
+            self.assertIsNotNone(bm)
+
+            schemes = case.fvSchemes
+            self.assertIsNotNone(schemes)
+
+            sol = case.fvSolution
+            self.assertIsNotNone(sol)
+
+            p_field = case.p
+            self.assertEqual(p_field.dimensions, [0, 2, -2, 0, 0, 0, 0])
+
+        invalid_case = FoamCaseHandle(root_dir=TUTORIALS_DIR)
+        self.assertFalse(invalid_case.is_valid)
+
+        with self.assertRaises(NotACaseError):
+            _ = invalid_case.controlDict
 
 
 if __name__ == "__main__":
