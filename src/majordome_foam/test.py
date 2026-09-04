@@ -57,6 +57,26 @@ class TestMajordomeFoam(unittest.TestCase):
         self.assertTrue(dict_obj.delete("purgeWrite"))
         self.assertNotIn("purgeWrite", dict_obj)
 
+    def test_to_foam_alignment_and_spacing(self):
+        content = """
+        application simpleFoam;
+        deltaT 1;
+        runTimeModifiable true;
+        """
+        dict_obj = FoamDict.parse(content)
+        foam_str = dict_obj.to_foam()
+
+        lines = [line for line in foam_str.splitlines() if line.strip()]
+        self.assertEqual(len(lines), 3)
+
+        self.assertTrue(lines[0].startswith("application        simpleFoam;"))
+        self.assertTrue(lines[1].startswith("deltaT             1;"))
+        self.assertTrue(lines[2].startswith("runTimeModifiable  true;"))
+
+        raw_lines = foam_str.splitlines()
+        self.assertEqual(raw_lines[1], "")
+        self.assertEqual(raw_lines[3], "")
+
     def test_control_dict_wrapper(self):
         pitz_control = TUTORIALS_DIR / "01-pitzDaily/system/controlDict"
         if pitz_control.exists():

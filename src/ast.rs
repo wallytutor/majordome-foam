@@ -108,8 +108,31 @@ impl FoamDict {
         let pad = "    ".repeat(indent_level);
         let mut out = String::new();
 
+        let mut max_key_len = 0;
+
+        for elem in &self.elements {
+            match elem {
+                FoamElement::Entry { key, .. } => {
+                    if key.len() > max_key_len {
+                        max_key_len = key.len();
+                    }
+                }
+
+                FoamElement::Directive { name, .. } => {
+                    if name.len() > max_key_len {
+                        max_key_len = name.len();
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        let align_width = if max_key_len > 0 { max_key_len + 2 } else { 0 };
+
         for (idx, elem) in self.elements.iter().enumerate() {
             if idx > 0 {
+                out.push('\n');
                 out.push('\n');
             }
 
@@ -123,11 +146,29 @@ impl FoamDict {
                 }
 
                 FoamElement::Directive { name, value } => {
-                    out.push_str(&format!("{}{} {};", pad, name, value));
+                    if value.is_empty() {
+                        out.push_str(&format!("{}{};", pad, name));
+                    } else if align_width > name.len() {
+                        let spacing = " ".repeat(align_width - name.len());
+                        out.push_str(&format!(
+                            "{}{}{}{};",
+                            pad, name, spacing, value
+                        ));
+                    } else {
+                        out.push_str(&format!("{}{} {};", pad, name, value));
+                    }
                 }
 
                 FoamElement::Entry { key, value } => {
-                    out.push_str(&format!("{}{} {};", pad, key, value));
+                    if align_width > key.len() {
+                        let spacing = " ".repeat(align_width - key.len());
+                        out.push_str(&format!(
+                            "{}{}{}{};",
+                            pad, key, spacing, value
+                        ));
+                    } else {
+                        out.push_str(&format!("{}{} {};", pad, key, value));
+                    }
                 }
 
                 FoamElement::Block {
